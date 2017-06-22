@@ -27,6 +27,7 @@
 #include "utils.h"
 
 #include <cstring>
+#include <cstdlib>
 #include <fstream>
 #include <utility>
 
@@ -98,25 +99,39 @@ void ImportProject::FileSettings::setDefines(std::string defs)
 
 static bool simplifyPathWithVariables(std::string &s, const std::map<std::string, std::string> &variables)
 {
-    std::set<std::string> expanded;
-    std::string::size_type start = 0;
-    while ((start = s.find("$(")) != std::string::npos) {
-        std::string::size_type end = s.find(')',start);
-        if (end == std::string::npos)
-            break;
-        const std::string var = s.substr(start+2,end-start-2);
-        if (expanded.find(var) != expanded.end())
-            break;
-        expanded.insert(var);
-        std::map<std::string, std::string>::const_iterator it1 = variables.find(var);
-        if (it1 == variables.end())
-            break;
-        s = s.substr(0,start) + it1->second + s.substr(end+1);
-    }
-    if (s.find("$(") != std::string::npos)
-        return false;
-    s = Path::simplifyPath(Path::fromNativeSeparators(s));
-    return true;
+	std::set<std::string> expanded;
+	std::string::size_type start = 0;
+	while ((start = s.find("$(")) != std::string::npos) {
+		std::string::size_type end = s.find(')', start);
+		if (end == std::string::npos)
+			break;
+		const std::string var = s.substr(start + 2, end - start - 2);
+		if (expanded.find(var) != expanded.end())
+			break;
+		expanded.insert(var);
+		std::map<std::string, std::string>::const_iterator it1 = variables.find(var);
+		std::string variableValue;
+		// variable was not found within defined variables
+		if (it1 != variables.end()) {
+			variableValue = it1->second;
+		}
+		// also search environment variables
+		else {
+			char const* envValue = std::getenv(var.c_str());
+			if (envValue) {
+				variableValue = std::string(envValue);
+			}
+			else {
+				break;
+			}
+		}
+
+		s = s.substr(0, start) + variableValue + s.substr(end + 1);
+	}
+	if (s.find("$(") != std::string::npos)
+		return false;
+	s = Path::simplifyPath(Path::fromNativeSeparators(s));
+	return true;
 }
 
 void ImportProject::FileSettings::setIncludePaths(const std::string &basepath, const std::list<std::string> &in, const std::map<std::string, std::string> &variables)
